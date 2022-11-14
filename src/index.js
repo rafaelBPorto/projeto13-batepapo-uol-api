@@ -92,7 +92,6 @@ app.get("/participants", async (req, res) => {
 
     try {
         const participants = await collectionParticipants.find().toArray();
-        console.log(participants)
         res.send(participants)
     } catch (err) {
         console.log(err);
@@ -149,33 +148,36 @@ app.post("/messages", async (req, res) => {
 })
 
 app.get("/messages", async (req, res) => {
-    const limit  = Number(req.query.limit)
+    const limit = Number(req.query.limit)
     const user = req.headers.user
-    console.log(user)
-    console.log(limit)
+
     if (!limit) {
         try {
-            const messages = await collectionMessages.find({$or:[
-                {from:user},
-                {type:"message"},
-                {type:"status"},
-                {to:user },
-                {to: "Todos"}
-            ]}).toArray()
+            const messages = await collectionMessages.find({
+                $or: [
+                    { from: user },
+                    { type: "message" },
+                    { type: "status" },
+                    { to: user },
+                    { to: "Todos" }
+                ]
+            }).toArray()
             res.send(messages)
         } catch (err) {
             console.log(err)
             res.sendStatus(500)
         }
-    }else{
+    } else {
         try {
-            const messages = await collectionMessages.find({$or:[
-                {from:user},
-                {type:"message"},
-                {type:"status"},
-                {to:user },
-                {to: "Todos"}
-            ]}).limit(limit).toArray()
+            const messages = await collectionMessages.find({
+                $or: [
+                    { from: user },
+                    { type: "message" },
+                    { type: "status" },
+                    { to: user },
+                    { to: "Todos" }
+                ]
+            }).limit(limit).toArray()
             res.send(messages)
         } catch (err) {
             console.log(err)
@@ -184,6 +186,51 @@ app.get("/messages", async (req, res) => {
     }
 
 })
+
+app.post("/status", async (req, res) => {
+    const validationHeaders = UserSchema.validate({ User: req.headers.user })
+
+    if (validationHeaders.error) {
+        console.log(validationHeaders.error)
+        res.sendStatus(404);
+        return;
+    }
+
+    const user = req.headers.user
+
+    try {
+        const isUser = await collectionParticipants.findOne({ "name": user })
+        if (!isUser) {
+            res.sendStatus(404)
+            return
+        }
+        await collectionParticipants.updateOne({ name: user }, { $set: { lastStatus: Date.now() } })
+        res.sendStatus(200)
+    } catch (err) {
+        res.sendStatus(500)
+    }
+})
+
+const listExpiredUsers = []
+
+setInterval(async () => {
+    try {
+        const users = await collectionParticipants.find({}).toArray();
+        const userExpired = users.filter((participant) => {
+            return participant.lastStatus < Date.now() - 10000;
+        });
+        userExpired.forEach(async (participant) => {
+            listExpiredUsers.push({
+                from: participant.name, to: 'Todos', text: 'sai da sala...', type: 'status', time: dayjs().format("HH:mm:ss") 
+            })
+        await collectionParticipants.deleteOne({ _id: participant._id });
+    });
+    } catch (error) {
+    console.log(error);
+}
+
+console.log(listExpiredUsers)
+}, 15000);
 
 
 app.listen(process.env.PORT, () => console.log(`Server running in port: ${process.env.PORT}`));
