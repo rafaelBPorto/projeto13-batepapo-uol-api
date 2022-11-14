@@ -46,14 +46,8 @@ const collectionMessages = db.collection("messages")
 app.post("/participants", async (req, res) => {
     const { name } = req.body
 
-    const timeEnter = Date.now()
-
-    const hours = new Date().getHours()
-    const minutes = new Date().getMinutes()
-    const seconds = new Date().getSeconds()
-
-    console.log(req.body)
-    console.log(name)
+    const now = dayjs()
+    const enterRoom = Date.now()
 
     const validation = nameSchema.validate(req.body, { abortEarly: false });
 
@@ -72,6 +66,7 @@ app.post("/participants", async (req, res) => {
             res.status(409).send("Este nome já está sendo utilizado!")
             return;
         }
+
     } catch (err) {
         console.log(err);
         res.status(500);
@@ -79,12 +74,13 @@ app.post("/participants", async (req, res) => {
 
     //Insert name on db
     try {
-        await collectionParticipants.insertOne({ name, lastStatus: timeEnter });
+        await collectionParticipants.insertOne({ name, lastStatus: enterRoom });
         await collectionMessages.insertOne({
             from: name,
             to: 'Todos',
+            text: 'entrou na sala',
             type: 'status',
-            time: `${hours}:${minutes}:${seconds}`
+            time: now.format("HH:mm:ss")
         })
         res.sendStatus(201);
     } catch (err) {
@@ -106,10 +102,10 @@ app.get("/participants", async (req, res) => {
 
 app.post("/messages", async (req, res) => {
     const validationBody = messageSchema.validate(req.body, { abortEarly: false });
-    
+
     //Hearder validation
-        //verificar se hearder esta correto - ok
-        //verificar se header user existe - pendente
+    //verificar se hearder esta correto - ok
+    //verificar se header user existe - pendente
     let validationHeaders = null
     if (req.headers.user) {
         validationHeaders = UserSchema.validate({ User: req.headers.user })
@@ -119,26 +115,29 @@ app.post("/messages", async (req, res) => {
     }
 
     //Body validation
-        //Verificar se o body esta correto - ok
-        if (validationBody.error) {
-            console.log(validationBody.error)
-            res.status(422).send("Incorrect body")
-            return
-        }
-        
+    //Verificar se o body esta correto - ok
+    if (validationBody.error) {
+        console.log(validationBody.error)
+        res.status(422).send("Incorrect body")
+        return
+    }
+
     //Save new message
-        //verificar se o recptor da mensagem existe - ok
+    //verificar se o recptor da mensagem existe - ok
     try {
         const from = await collectionParticipants.findOne({ "name": req.body.to })
         if (from) {
-            const now =dayjs().format("HH:mm:ss")        
+            const now = dayjs().format("HH:mm:ss")
             await collectionMessages.insertOne({
                 from: req.headers.user,
                 to: req.body.to,
-                type: req.body.status,
-                time: now
+                text: req.body.text,
+                type: req.body.type,
+                time: now,
             })
-        }else{
+            console.log("Nova mensagem adicionada")
+            res.sendStatus(201)
+        } else {
             res.status(422).send("Receiver not found")
             return
         }
@@ -146,14 +145,44 @@ app.post("/messages", async (req, res) => {
         res.sendStatus(500)
     }
 
-    try {
-        const messages = await collectionMessages.find().toArray()
-        console.log("Nova mensagem adicionada")
-        res.sendStatus(201)
-    } catch (err) {
-        console.log(err)
-        res.sendStatus(500)
+
+})
+
+app.get("/messages", async (req, res) => {
+    const limit  = Number(req.query.limit)
+    const user = req.headers.user
+    console.log(user)
+    console.log(limit)
+    if (!limit) {
+        try {
+            const messages = await collectionMessages.find({$or:[
+                {from:user},
+                {type:"message"},
+                {type:"status"},
+                {to:user },
+                {to: "Todos"}
+            ]}).toArray()
+            res.send(messages)
+        } catch (err) {
+            console.log(err)
+            res.sendStatus(500)
+        }
+    }else{
+        try {
+            const messages = await collectionMessages.find({$or:[
+                {from:user},
+                {type:"message"},
+                {type:"status"},
+                {to:user },
+                {to: "Todos"}
+            ]}).limit(limit).toArray()
+            res.send(messages)
+        } catch (err) {
+            console.log(err)
+            res.sendStatus(500)
+        }
     }
+
 })
 
 
