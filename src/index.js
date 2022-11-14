@@ -31,7 +31,7 @@ app.post("/participants", async (req, res) => {
     const { name } = req.body
 
     const timeEnter = Date.now()
-    
+
     const hours = new Date().getHours()
     const minutes = new Date().getMinutes()
     const seconds = new Date().getSeconds()
@@ -76,5 +76,15 @@ app.post("/participants", async (req, res) => {
     }
 })
 
+app.get("/participants", async (req, res) => {
+    try {
+        const participants = await collectionParticipants.find().toArray();
+        console.log(participants)
+        res.send(participants)
+    } catch (err) {
+        console.log(err);
+        res.sendStatus(500)
+    }
+})
 
 app.listen(process.env.PORT, () => console.log(`Server running in port: ${process.env.PORT}`));
